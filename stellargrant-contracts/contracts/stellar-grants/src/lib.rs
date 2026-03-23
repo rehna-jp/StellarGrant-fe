@@ -1,9 +1,9 @@
 #![no_std]
+mod events;
 mod storage;
 mod types;
-mod events;
 
-use soroban_sdk::{contract, contractimpl, Env, Address};
+use soroban_sdk::{contract, contractimpl, Address, Env};
 pub use storage::Storage;
 pub use types::{ContractError, Grant, Milestone, MilestoneState};
 
@@ -20,17 +20,17 @@ impl StellarGrantsContract {
 
     /// Allows authorized reviewers to vote on submitted milestones.
     /// Tracks votes and calculates quorum for approval.
-    /// 
+    ///
     /// # Arguments
     /// * `env` - The Soroban environment
     /// * `grant_id` - The ID of the grant
     /// * `milestone_idx` - The index of the milestone to vote on
     /// * `reviewer` - The address of the reviewer
     /// * `approve` - True to approve, false to reject
-    /// 
+    ///
     /// # Returns
     /// `true` if quorum is reached, `false` otherwise
-    /// 
+    ///
     /// # Errors
     /// * `GrantNotFound` - If the grant doesn't exist
     /// * `MilestoneNotSubmitted` - If the milestone is not in Submitted state

@@ -8,7 +8,13 @@ pub struct MilestoneVoted {
     pub timestamp: u64,
 }
 
-pub fn milestone_voted(env: &Env, grant_id: u64, milestone_idx: u32, reviewer: Address, approve: bool) {
+pub fn milestone_voted(
+    env: &Env,
+    grant_id: u64,
+    milestone_idx: u32,
+    reviewer: Address,
+    approve: bool,
+) {
     let topics = (symbol_short!("voted"), grant_id, milestone_idx);
     let data = (reviewer, approve, env.ledger().timestamp());
     env.events().publish(topics, data);

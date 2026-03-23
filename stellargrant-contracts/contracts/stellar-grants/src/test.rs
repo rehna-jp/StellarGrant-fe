@@ -1,19 +1,30 @@
 #[cfg(test)]
 mod tests {
-    use crate::StellarGrantsContract;
-    use crate::StellarGrantsContractClient;
     use crate::storage::Storage;
     use crate::types::{ContractError, Grant, Milestone, MilestoneState};
-    use soroban_sdk::{testutils::Address as _, Address, Env, Vec, Map};
+    use crate::StellarGrantsContract;
+    use crate::StellarGrantsContractClient;
+    use soroban_sdk::{testutils::Address as _, Address, Env, Map, Vec};
 
-    fn setup_test(env: &Env) -> (StellarGrantsContractClient<'_>, Address, soroban_sdk::Address) {
+    fn setup_test(
+        env: &Env,
+    ) -> (
+        StellarGrantsContractClient<'_>,
+        Address,
+        soroban_sdk::Address,
+    ) {
         let contract_id = env.register(StellarGrantsContract, ());
         let client = StellarGrantsContractClient::new(env, &contract_id);
         let admin = Address::generate(env);
         (client, admin, contract_id)
     }
 
-    fn create_grant(env: &Env, contract_id: &soroban_sdk::Address, grant_id: u64, reviewers: Vec<Address>) {
+    fn create_grant(
+        env: &Env,
+        contract_id: &soroban_sdk::Address,
+        grant_id: u64,
+        reviewers: Vec<Address>,
+    ) {
         env.as_contract(contract_id, || {
             let grant = Grant {
                 id: grant_id,
@@ -24,7 +35,13 @@ mod tests {
         });
     }
 
-    fn create_milestone(env: &Env, contract_id: &soroban_sdk::Address, grant_id: u64, milestone_idx: u32, state: MilestoneState) {
+    fn create_milestone(
+        env: &Env,
+        contract_id: &soroban_sdk::Address,
+        grant_id: u64,
+        milestone_idx: u32,
+        state: MilestoneState,
+    ) {
         env.as_contract(contract_id, || {
             let milestone = Milestone {
                 state,
@@ -47,13 +64,19 @@ mod tests {
         let mut reviewers = Vec::new(&env);
         reviewers.push_back(reviewer.clone());
         create_grant(&env, &contract_id, grant_id, reviewers);
-        create_milestone(&env, &contract_id, grant_id, milestone_idx, MilestoneState::Submitted);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
 
         env.mock_all_auths();
         let result = client.milestone_vote(&grant_id, &milestone_idx, &reviewer, &true);
 
         assert_eq!(result, true); // Quorum reached (1/1)
-        
+
         env.as_contract(&contract_id, || {
             let updated_milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
             assert_eq!(updated_milestone.approvals, 1);
@@ -74,10 +97,17 @@ mod tests {
         let mut reviewers = Vec::new(&env);
         reviewers.push_back(reviewer.clone());
         create_grant(&env, &contract_id, grant_id, reviewers);
-        create_milestone(&env, &contract_id, grant_id, milestone_idx, MilestoneState::Submitted);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
 
         env.mock_all_auths();
-        let result = client.try_milestone_vote(&grant_id, &milestone_idx, &unauthorized_user, &true);
+        let result =
+            client.try_milestone_vote(&grant_id, &milestone_idx, &unauthorized_user, &true);
 
         assert_eq!(result, Err(Ok(ContractError::Unauthorized.into())));
     }
@@ -95,7 +125,13 @@ mod tests {
         reviewers.push_back(reviewer.clone());
         reviewers.push_back(other_reviewer.clone());
         create_grant(&env, &contract_id, grant_id, reviewers);
-        create_milestone(&env, &contract_id, grant_id, milestone_idx, MilestoneState::Submitted);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
 
         env.mock_all_auths();
         client.milestone_vote(&grant_id, &milestone_idx, &reviewer, &true);
@@ -116,7 +152,13 @@ mod tests {
         reviewers.push_back(reviewer.clone());
         create_grant(&env, &contract_id, grant_id, reviewers);
         // Milestone in Pending state
-        create_milestone(&env, &contract_id, grant_id, milestone_idx, MilestoneState::Pending);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Pending,
+        );
 
         env.mock_all_auths();
         let result = client.try_milestone_vote(&grant_id, &milestone_idx, &reviewer, &true);
@@ -137,18 +179,24 @@ mod tests {
         reviewers.push_back(reviewer1.clone());
         reviewers.push_back(reviewer2.clone());
         create_grant(&env, &contract_id, grant_id, reviewers);
-        create_milestone(&env, &contract_id, grant_id, milestone_idx, MilestoneState::Submitted);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
 
         env.mock_all_auths();
-        
+
         // First vote - quorum not reached (1/2)
         let result1 = client.milestone_vote(&grant_id, &milestone_idx, &reviewer1, &true);
         assert_eq!(result1, false);
-        
+
         // Second vote - quorum reached (2/2)
         let result2 = client.milestone_vote(&grant_id, &milestone_idx, &reviewer2, &true);
         assert_eq!(result2, true);
-        
+
         env.as_contract(&contract_id, || {
             let updated_milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
             assert_eq!(updated_milestone.state, MilestoneState::Approved);
@@ -170,16 +218,28 @@ mod tests {
         reviewers.push_back(reviewer2.clone());
         reviewers.push_back(reviewer3.clone());
         create_grant(&env, &contract_id, grant_id, reviewers);
-        create_milestone(&env, &contract_id, grant_id, milestone_idx, MilestoneState::Submitted);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
 
         env.mock_all_auths();
-        
+
         // First vote - 1/3
-        assert_eq!(client.milestone_vote(&grant_id, &milestone_idx, &reviewer1, &true), false);
-        
+        assert_eq!(
+            client.milestone_vote(&grant_id, &milestone_idx, &reviewer1, &true),
+            false
+        );
+
         // Second vote - 2/3 (quorum reached: 3/2 + 1 = 1 + 1 = 2)
-        assert_eq!(client.milestone_vote(&grant_id, &milestone_idx, &reviewer2, &true), true);
-        
+        assert_eq!(
+            client.milestone_vote(&grant_id, &milestone_idx, &reviewer2, &true),
+            true
+        );
+
         env.as_contract(&contract_id, || {
             let updated_milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
             assert_eq!(updated_milestone.state, MilestoneState::Approved);

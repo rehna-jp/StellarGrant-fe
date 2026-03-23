@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Env};
 use crate::types::{Grant, Milestone};
+use soroban_sdk::{contracttype, Env};
 
 #[contracttype]
 pub enum DataKey {
@@ -16,15 +16,21 @@ impl Storage {
     }
 
     pub fn set_grant(env: &Env, grant_id: u64, grant: &Grant) {
-        env.storage().persistent().set(&DataKey::Grant(grant_id), grant);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Grant(grant_id), grant);
     }
 
     pub fn get_milestone(env: &Env, grant_id: u64, milestone_idx: u32) -> Option<Milestone> {
-        env.storage().persistent().get(&DataKey::Milestone(grant_id, milestone_idx))
+        env.storage()
+            .persistent()
+            .get(&DataKey::Milestone(grant_id, milestone_idx))
     }
 
     pub fn set_milestone(env: &Env, grant_id: u64, milestone_idx: u32, milestone: &Milestone) {
-        env.storage().persistent().set(&DataKey::Milestone(grant_id, milestone_idx), milestone);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Milestone(grant_id, milestone_idx), milestone);
     }
 
     pub fn has_grant(env: &Env, grant_id: u64) -> bool {
