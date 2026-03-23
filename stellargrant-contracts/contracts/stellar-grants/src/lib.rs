@@ -1,11 +1,9 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, Env, Error};
 
-mod events;
 mod storage;
 mod types;
 
-pub use events::Events;
 pub use storage::Storage;
 pub use types::ContractError;
 

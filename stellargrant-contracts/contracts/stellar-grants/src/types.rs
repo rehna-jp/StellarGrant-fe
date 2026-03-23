@@ -1,4 +1,4 @@
-use soroban_sdk::{Error, IntoVal, Val};
+use soroban_sdk::Error;
 
 /// Contract error types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +29,3 @@ impl From<Error> for ContractError {
         ContractError::InvalidInput
     }
 }
-
-// Note: Grant and Milestone structures would need to implement
-// soroban_sdk::Val, soroban_sdk::TryFromVal, etc. for full Soroban compatibility
-// These are placeholder types for the structure
