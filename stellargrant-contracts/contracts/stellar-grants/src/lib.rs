@@ -596,8 +596,9 @@ impl StellarGrantsContract {
             return Err(ContractError::InsufficientStake);
         }
 
+        let contract_addr = env.current_contract_address();
         let client = token::Client::new(&env, &grant.token);
-        client.transfer(&reviewer, &env.current_contract_address(), &amount);
+        client.transfer(&reviewer, &contract_addr, &amount);
 
         let current = Storage::get_reviewer_stake(&env, grant_id, &reviewer);
         Storage::set_reviewer_stake(&env, grant_id, &reviewer, current + amount);
@@ -700,8 +701,9 @@ impl StellarGrantsContract {
                 return Err(ContractError::InvalidState);
             }
 
+            let contract_addr = env.current_contract_address();
             let client = token::Client::new(&env, &grant.token);
-            client.transfer(&funder, &env.current_contract_address(), &amount);
+            client.transfer(&funder, &contract_addr, &amount);
 
             grant.escrow_balance = grant
                 .escrow_balance
