@@ -19,6 +19,11 @@ pub enum ContractError {
     NotAllMilestonesApproved = 12,
     AlreadyRegistered = 13,
     MilestoneAlreadySubmitted = 14,
+    InsufficientStake = 15,
+    StakeNotFound = 16,
+    NotVerified = 17,
+    BatchEmpty = 18,
+    BatchTooLarge = 19,
 }
 
 #[contracttype]
