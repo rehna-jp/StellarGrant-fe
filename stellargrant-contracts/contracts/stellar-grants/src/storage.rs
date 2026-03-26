@@ -15,6 +15,7 @@ pub enum DataKey {
     Treasury,
     /// Identity oracle contract address for KYC verification
     IdentityOracle,
+    ReviewerReputation(soroban_sdk::Address),
 }
 
 pub struct Storage;
@@ -111,5 +112,18 @@ impl Storage {
         env.storage()
             .persistent()
             .set(&DataKey::Contributor(contributor), profile);
+    }
+
+    pub fn get_reviewer_reputation(env: &Env, reviewer: soroban_sdk::Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ReviewerReputation(reviewer))
+            .unwrap_or(1) // Default basic reputation
+    }
+
+    pub fn set_reviewer_reputation(env: &Env, reviewer: soroban_sdk::Address, score: u32) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::ReviewerReputation(reviewer), &score);
     }
 }

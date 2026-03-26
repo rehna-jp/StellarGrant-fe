@@ -312,20 +312,36 @@ impl StellarGrantsContract {
             return Err(ContractError::AlreadyVoted);
         }
 
+        let reputation = Storage::get_reviewer_reputation(&env, reviewer.clone());
         milestone.votes.set(reviewer.clone(), approve);
+
         if approve {
-            milestone.approvals += 1;
+            milestone.approvals += reputation;
         } else {
-            milestone.rejections += 1;
+            milestone.rejections += reputation;
         }
 
-        let total_reviewers = grant.reviewers.len();
-        let quorum_threshold = (total_reviewers / 2) + 1;
+        let mut total_weight: u32 = 0;
+        for r in grant.reviewers.iter() {
+            total_weight += Storage::get_reviewer_reputation(&env, r);
+        }
+
+        let quorum_threshold = (total_weight / 2) + 1;
         let quorum_reached = milestone.approvals >= quorum_threshold;
 
         if quorum_reached {
             milestone.state = MilestoneState::Approved;
             milestone.status_updated_at = env.ledger().timestamp();
+
+            // Reward harmonious voters who voted approve
+            for (voter, voted_approve) in milestone.votes.iter() {
+                if voted_approve {
+                    let mut rep = Storage::get_reviewer_reputation(&env, voter.clone());
+                    rep += 1;
+                    Storage::set_reviewer_reputation(&env, voter.clone(), rep);
+                }
+            }
+
             Events::milestone_status_changed(
                 &env,
                 grant_id,
@@ -366,17 +382,32 @@ impl StellarGrantsContract {
             return Err(ContractError::AlreadyVoted);
         }
 
+        let reputation = Storage::get_reviewer_reputation(&env, reviewer.clone());
         milestone.votes.set(reviewer.clone(), false);
-        milestone.rejections += 1;
+        milestone.rejections += reputation;
         milestone.reasons.set(reviewer.clone(), reason.clone());
 
-        let total_reviewers = grant.reviewers.len();
-        let majority_threshold = (total_reviewers / 2) + 1;
+        let mut total_weight: u32 = 0;
+        for r in grant.reviewers.iter() {
+            total_weight += Storage::get_reviewer_reputation(&env, r);
+        }
+
+        let majority_threshold = (total_weight / 2) + 1;
         let majority_rejected = milestone.rejections >= majority_threshold;
 
         if majority_rejected {
             milestone.state = MilestoneState::Rejected;
             milestone.status_updated_at = env.ledger().timestamp();
+
+            // Reward harmonious voters who voted reject
+            for (voter, voted_approve) in milestone.votes.iter() {
+                if !voted_approve {
+                    let mut rep = Storage::get_reviewer_reputation(&env, voter.clone());
+                    rep += 1;
+                    Storage::set_reviewer_reputation(&env, voter.clone(), rep);
+                }
+            }
+
             Events::milestone_status_changed(
                 &env,
                 grant_id,

@@ -1239,4 +1239,189 @@ mod tests {
         );
         assert!(res.is_err());
     }
+
+    #[test]
+    fn test_reputation_weighted_quorum() {
+        let env = Env::default();
+        let (client, _, contract_id) = setup_test(&env);
+        let grant_id = 1;
+        let milestone_idx = 0;
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let high_rep_reviewer = Address::generate(&env);
+        let low_rep_reviewer = Address::generate(&env);
+
+        let mut reviewers = Vec::new(&env);
+        reviewers.push_back(high_rep_reviewer.clone());
+        reviewers.push_back(low_rep_reviewer.clone());
+        create_grant(&env, &contract_id, grant_id, owner, token, reviewers);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
+
+        // Give high_rep_reviewer a reputation of 3, low_rep_reviewer a reputation of 1
+        env.as_contract(&contract_id, || {
+            Storage::set_reviewer_reputation(&env, high_rep_reviewer.clone(), 3);
+            Storage::set_reviewer_reputation(&env, low_rep_reviewer.clone(), 1);
+        });
+
+        env.mock_all_auths();
+
+        // Total weight = 3 + 1 = 4. Quorum margin = (4 / 2) + 1 = 3.
+        // high_rep_reviewer's vote (3 weight) should pass it alone.
+        let result = client.milestone_vote(&grant_id, &milestone_idx, &high_rep_reviewer, &true);
+        assert_eq!(result, true);
+
+        env.as_contract(&contract_id, || {
+            let updated_milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
+            assert_eq!(updated_milestone.state, MilestoneState::Approved);
+            // After consensus, high_rep_reviewer should have 4 (3 + 1)
+            assert_eq!(
+                Storage::get_reviewer_reputation(&env, high_rep_reviewer.clone()),
+                4
+            );
+        });
+    }
+
+    #[test]
+    fn test_reputation_increment_on_rejection() {
+        let env = Env::default();
+        let (client, _, contract_id) = setup_test(&env);
+        let grant_id = 1;
+        let milestone_idx = 0;
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let reviewer1 = Address::generate(&env);
+        let reviewer2 = Address::generate(&env);
+
+        let mut reviewers = Vec::new(&env);
+        reviewers.push_back(reviewer1.clone());
+        reviewers.push_back(reviewer2.clone());
+        create_grant(&env, &contract_id, grant_id, owner, token, reviewers);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
+
+        env.mock_all_auths();
+
+        // Initially both have rep 1 (default)
+        // total = 2, majority threshold = 2.
+        let reason = String::from_str(&env, "Incomplete");
+        client.milestone_reject(&grant_id, &milestone_idx, &reviewer1, &reason);
+        let result = client.milestone_reject(&grant_id, &milestone_idx, &reviewer2, &reason);
+        assert_eq!(result, true); // Majority reached (2/2)
+
+        // After rejection consensus, both should have rep 2
+        env.as_contract(&contract_id, || {
+            assert_eq!(Storage::get_reviewer_reputation(&env, reviewer1.clone()), 2);
+            assert_eq!(Storage::get_reviewer_reputation(&env, reviewer2.clone()), 2);
+            let updated_milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
+            assert_eq!(updated_milestone.state, MilestoneState::Rejected);
+        });
+    }
+
+    #[test]
+    fn test_reputation_weighted_vote_failure() {
+        let env = Env::default();
+        let (client, _, contract_id) = setup_test(&env);
+        let grant_id = 1;
+        let milestone_idx = 0;
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let high_rep_reviewer = Address::generate(&env);
+        let low_rep_reviewer = Address::generate(&env);
+
+        let mut reviewers = Vec::new(&env);
+        reviewers.push_back(high_rep_reviewer.clone());
+        reviewers.push_back(low_rep_reviewer.clone());
+        create_grant(&env, &contract_id, grant_id, owner, token, reviewers);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
+
+        // Give high_rep_reviewer a reputation of 3, low_rep_reviewer a reputation of 1
+        env.as_contract(&contract_id, || {
+            Storage::set_reviewer_reputation(&env, high_rep_reviewer.clone(), 3);
+            Storage::set_reviewer_reputation(&env, low_rep_reviewer.clone(), 1);
+        });
+
+        env.mock_all_auths();
+
+        // Total weight = 3 + 1 = 4. Quorum margin = (4 / 2) + 1 = 3.
+        // low_rep_reviewer's vote (1 weight) should not reach quorum alone.
+        let result = client.milestone_vote(&grant_id, &milestone_idx, &low_rep_reviewer, &true);
+        assert_eq!(result, false);
+
+        env.as_contract(&contract_id, || {
+            let updated_milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
+            assert_eq!(updated_milestone.state, MilestoneState::Submitted);
+            // No increment yet since consensus was not reached
+            assert_eq!(
+                Storage::get_reviewer_reputation(&env, low_rep_reviewer.clone()),
+                1
+            );
+        });
+    }
+
+    #[test]
+    fn test_no_reputation_increment_for_dissenting_voter() {
+        let env = Env::default();
+        let (client, _, contract_id) = setup_test(&env);
+        let grant_id = 1;
+        let milestone_idx = 0;
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let reviewer_harmonious = Address::generate(&env);
+        let reviewer_dissenting = Address::generate(&env);
+
+        let mut reviewers = Vec::new(&env);
+        reviewers.push_back(reviewer_harmonious.clone());
+        reviewers.push_back(reviewer_dissenting.clone());
+        create_grant(&env, &contract_id, grant_id, owner, token, reviewers);
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
+
+        // Give reviewer_harmonious reputation 2, reviewer_dissenting reputation 1
+        env.as_contract(&contract_id, || {
+            Storage::set_reviewer_reputation(&env, reviewer_harmonious.clone(), 2);
+            Storage::set_reviewer_reputation(&env, reviewer_dissenting.clone(), 1);
+        });
+
+        env.mock_all_auths();
+
+        // Total weight = 3. Quorum = 2.
+        // Dissenting votes false first.
+        client.milestone_vote(&grant_id, &milestone_idx, &reviewer_dissenting, &false);
+        // Harmonious votes true, reaching quorum 2.
+        let result = client.milestone_vote(&grant_id, &milestone_idx, &reviewer_harmonious, &true);
+        assert_eq!(result, true);
+
+        env.as_contract(&contract_id, || {
+            assert_eq!(
+                Storage::get_reviewer_reputation(&env, reviewer_harmonious.clone()),
+                3
+            ); // 2 -> 3
+            assert_eq!(
+                Storage::get_reviewer_reputation(&env, reviewer_dissenting.clone()),
+                1
+            ); // Stayed 1
+        });
+    }
 }
