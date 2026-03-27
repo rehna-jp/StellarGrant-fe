@@ -17,6 +17,7 @@ pub enum DataKey {
     IdentityOracle,
     ReviewerReputation(soroban_sdk::Address),
     GlobalAdmin,
+    Council,
     EscrowState(u64),
     MultisigSigners(u64),
     ReleaseSignerApproval(u64, soroban_sdk::Address),
@@ -66,6 +67,14 @@ impl Storage {
 
     pub fn set_global_admin(env: &Env, admin: &soroban_sdk::Address) {
         env.storage().persistent().set(&DataKey::GlobalAdmin, admin);
+    }
+
+    pub fn get_council(env: &Env) -> Option<soroban_sdk::Address> {
+        env.storage().persistent().get(&DataKey::Council)
+    }
+
+    pub fn set_council(env: &Env, council: &soroban_sdk::Address) {
+        env.storage().persistent().set(&DataKey::Council, council);
     }
 
     pub fn get_grant(env: &Env, grant_id: u64) -> Option<Grant> {
