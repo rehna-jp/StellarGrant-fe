@@ -20,8 +20,18 @@ pub struct StellarGrantsContract;
 
 #[contractimpl]
 impl StellarGrantsContract {
-    /// Initialize the contract
-    pub fn initialize(_env: Env) -> Result<(), ContractError> {
+    /// Initialize the contract with a council address for dispute resolution.
+    ///
+    /// # Arguments
+    /// * `council` - Address of DAO Council or arbitration authority.
+    ///
+    /// # Returns
+    /// * `Ok(())` on success.
+    ///
+    /// # Errors
+    /// * None.
+    pub fn initialize(env: Env, council: Address) -> Result<(), ContractError> {
+        Storage::set_council(&env, &council);
         Ok(())
     }
 
@@ -38,6 +48,18 @@ impl StellarGrantsContract {
             }
         }
         Storage::set_global_admin(&env, &new_admin);
+        Ok(())
+    }
+
+    /// Set or rotate the DAO Council address for milestone disputes.
+    pub fn set_council(env: Env, caller: Address, council: Address) -> Result<(), ContractError> {
+        caller.require_auth();
+        if let Some(current_admin) = Storage::get_global_admin(&env) {
+            if current_admin != caller {
+                return Err(ContractError::Unauthorized);
+            }
+        }
+        Storage::set_council(&env, &council);
         Ok(())
     }
 
@@ -678,6 +700,72 @@ impl StellarGrantsContract {
         Events::milestone_rejected(&env, grant_id, milestone_idx, reviewer, reason);
 
         Ok(majority_rejected)
+    }
+
+    /// Allow grant owner to open a dispute when milestone is rejected.
+    pub fn milestone_dispute(
+        env: Env,
+        grant_id: u64,
+        milestone_idx: u32,
+        recipient: Address,
+        reason: String,
+    ) -> Result<(), ContractError> {
+        let _reason = reason;
+        recipient.require_auth();
+
+        let grant = Storage::get_grant(&env, grant_id).ok_or(ContractError::GrantNotFound)?;
+        if grant.owner != recipient {
+            return Err(ContractError::Unauthorized);
+        }
+
+        let mut milestone = Storage::get_milestone(&env, grant_id, milestone_idx)
+            .ok_or(ContractError::MilestoneNotFound)?;
+
+        if milestone.state != MilestoneState::Rejected {
+            return Err(ContractError::InvalidState);
+        }
+
+        milestone.state = MilestoneState::Disputed;
+        milestone.status_updated_at = env.ledger().timestamp();
+        Storage::set_milestone(&env, grant_id, milestone_idx, &milestone);
+
+        Events::milestone_status_changed(&env, grant_id, milestone_idx, MilestoneState::Disputed);
+        Ok(())
+    }
+
+    /// Council resolves a disputed milestone, either approving or confirming rejection.
+    pub fn milestone_resolve_dispute(
+        env: Env,
+        council: Address,
+        grant_id: u64,
+        milestone_idx: u32,
+        approve: bool,
+    ) -> Result<(), ContractError> {
+        council.require_auth();
+
+        let council_addr = Storage::get_council(&env).ok_or(ContractError::InvalidInput)?;
+        if council_addr != council {
+            return Err(ContractError::Unauthorized);
+        }
+
+        let mut milestone = Storage::get_milestone(&env, grant_id, milestone_idx)
+            .ok_or(ContractError::MilestoneNotFound)?;
+
+        if milestone.state != MilestoneState::Disputed {
+            return Err(ContractError::InvalidState);
+        }
+
+        milestone.state = if approve {
+            MilestoneState::Approved
+        } else {
+            MilestoneState::Rejected
+        };
+        milestone.status_updated_at = env.ledger().timestamp();
+        Storage::set_milestone(&env, grant_id, milestone_idx, &milestone);
+
+        Events::milestone_status_changed(&env, grant_id, milestone_idx, milestone.state.clone());
+
+        Ok(())
     }
 
     /// Allows a grant recipient to submit a completed milestone for reviewer evaluation.

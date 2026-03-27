@@ -2032,6 +2032,93 @@ mod tests {
     }
 
     #[test]
+    fn test_milestone_dispute_by_owner() {
+        let env = Env::default();
+        let (client, _, contract_id) = setup_test(&env);
+        let grant_id = 1u64;
+        let milestone_idx = 0u32;
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let reviewer = Address::generate(&env);
+
+        let mut reviewers = Vec::new(&env);
+        reviewers.push_back(reviewer.clone());
+        create_grant(
+            &env,
+            &contract_id,
+            grant_id,
+            owner.clone(),
+            token,
+            reviewers,
+        );
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
+
+        env.mock_all_auths();
+        let reason = String::from_str(&env, "Incomplete");
+        client.milestone_reject(&grant_id, &milestone_idx, &reviewer, &reason);
+
+        let dispute_reason = String::from_str(&env, "Unfair rejection");
+        client.milestone_dispute(&grant_id, &milestone_idx, &owner, &dispute_reason);
+
+        env.as_contract(&contract_id, || {
+            let milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
+            assert_eq!(milestone.state, MilestoneState::Disputed);
+        });
+    }
+
+    #[test]
+    fn test_milestone_dispute_resolved_by_council() {
+        let env = Env::default();
+        let (client, _, contract_id) = setup_test(&env);
+        let grant_id = 1u64;
+        let milestone_idx = 0u32;
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let reviewer = Address::generate(&env);
+        let council = Address::generate(&env);
+
+        client.initialize(&council);
+
+        let mut reviewers = Vec::new(&env);
+        reviewers.push_back(reviewer.clone());
+        create_grant(
+            &env,
+            &contract_id,
+            grant_id,
+            owner.clone(),
+            token,
+            reviewers,
+        );
+        create_milestone(
+            &env,
+            &contract_id,
+            grant_id,
+            milestone_idx,
+            MilestoneState::Submitted,
+        );
+
+        env.mock_all_auths();
+        let reason = String::from_str(&env, "Incomplete");
+        client.milestone_reject(&grant_id, &milestone_idx, &reviewer, &reason);
+
+        let dispute_reason = String::from_str(&env, "Unfair rejection");
+        client.milestone_dispute(&grant_id, &milestone_idx, &owner, &dispute_reason);
+
+        client.milestone_resolve_dispute(&council, &grant_id, &milestone_idx, &true);
+
+        env.as_contract(&contract_id, || {
+            let milestone = Storage::get_milestone(&env, grant_id, milestone_idx).unwrap();
+            assert_eq!(milestone.state, MilestoneState::Approved);
+        });
+    }
+
+    #[test]
     fn test_reputation_weighted_vote_failure() {
         let env = Env::default();
         let (client, _, contract_id) = setup_test(&env);
